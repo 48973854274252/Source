@@ -65,7 +65,7 @@ local loader=''
 if getgenv().NATestingVer then
 	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/SWTTIN1"))();]]
 else
-	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/SWTTIN2.lua.txt"))();]]
+	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Lua/Obfuscate/Nameless"))();]]
 end
 
 NACaller(function()
