@@ -1,4 +1,4 @@
-
+print("test");
 --[[ 𝙽𝙰𝙼𝙴𝚕𝙴𝚂𝚂 𝙰𝙳𝙼𝙸𝙽 ]]--
 
 if getgenv().RealNamelessLoaded then return end
