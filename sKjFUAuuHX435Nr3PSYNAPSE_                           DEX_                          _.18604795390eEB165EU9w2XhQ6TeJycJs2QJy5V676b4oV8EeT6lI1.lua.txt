@@ -1,3 +1,4 @@
+]]--
 local Dex = game:GetObjects('rbxassetid://9553291002')[1]
 	Dex.Name=math.random()
 	if syn then syn.protect_gui(Dex) end
