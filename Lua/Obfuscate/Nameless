@@ -1,3 +1,6 @@
+
+--[[ 𝙽𝙰𝙼𝙴𝚕𝙴𝚂𝚂 𝙰𝙳𝙼𝙸𝙽 ]]--
+
 if getgenv().RealNamelessLoaded then return end
 
 local function NACaller(pp)--helps me log better
@@ -1225,7 +1228,7 @@ cmd.add({"executor","exec"},{"executor (exec)","Very simple executor"},function(
 end)
 
 cmd.add({"scripthub","hub"},{"scripthub (hub)","Thanks to scriptblox api"},function()
-	loadstring(game:HttpGet("https://raw.githubusercontent.com/ltseverydayyou/Nameless-Admin/main/ScriptHubNA.lua"))()
+	loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/Settings/lua/Scripthub"))()
 end)
 
 cmd.add({"stand"},{"stand <player>","Makes a player your stand"},function(...)
