@@ -4604,7 +4604,7 @@ local function main()
 	Lib.ParseXML = (function()
 		local func = function()
 			-- Only exists to parse RMD
-			-- from https://github.com/jonathanpoelen/xmlparser
+			-- from https://github.com/48973854274252/Source
 
 			local string, print, pairs = string, print, pairs
 
@@ -10962,7 +10962,7 @@ Main = (function()
 					Main.DepsVersionData[1] = ""
 				end
 			end
-			rawXML = rawXML or game:HttpGet("https://raw.githubusercontent.com/CloneTrooper1019/Roblox-Client-Tracker/roblox/ReflectionMetadata.xml")
+			rawXML = rawXML or game:HttpGet("https://raw.githubusercontent.com/48973854274252/Source/refs/heads/main/%E2%80%87FA%E2%80%87K%E2%80%87E%E2%80%87SCR3PT%25/1019/Roblox-Client-Tracker/roblox/ReflectionMetadata.xml")
 		else
 			if script:FindFirstChild("RMD") then
 				rawXML = require(script.RMD)
