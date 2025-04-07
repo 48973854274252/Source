@@ -621,7 +621,7 @@ local function QPQOTFN_fake_script() -- Executor.LocalScript
 		elseif bypassed == false then
 			local message = Instance.new("Message")
 			message.Parent = workspace
-			message.Text = "HAVENT LOADED FEBYASS SKID"
+			message.Text = "PLEASE LOAD BYPASS FIRST"
 			wait(1)
 			message:Destroy()
 		end
