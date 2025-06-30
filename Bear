@@ -70,7 +70,7 @@ Lighting = game:GetService("Lighting")
 
 -- Bear anniversary lobby theme ost id: rbxassetid://13508905498
 
-local Rayfield = loadstring(game:HttpGet('https://pastefy.app/XYZU0Z3J/raw'))()
+local Rayfield = loadstring(game:HttpGet('https://raw.githubusercontent.com/shlexware/Rayfield/main/source'))()
 
 
 local Window = Rayfield:CreateWindow({
