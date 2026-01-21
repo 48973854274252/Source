@@ -469,7 +469,7 @@ local function crearGUI_Movil()
 	forceLabelSmall.Font = Enum.Font.GothamBold
 	forceLabelSmall.TextColor3 = Color3.fromRGB(220,220,220)
 	forceLabelSmall.TextScaled = true
-	forceLabelSmall.Text = "Fuerza"
+	forceLabelSmall.Text = "Force"
 	forceLabelSmall.TextXAlignment = Enum.TextXAlignment.Left
 	forceLabelSmall.Parent = forcePanel
 
@@ -532,7 +532,7 @@ local function crearGUI_Movil()
 			GUIrefs.magnetBtn.Visible = true
 			GUIrefs.dragHandle.Visible = true
 			GUIrefs.forcePanel.Visible = true
-			GUIrefs.forceLabelSmall.Text = "Fuerza"
+			GUIrefs.forceLabelSmall.Text = "Force"
 			GUIrefs.forceInput.Text = tostring(math.floor(fuerzaIman))
 		else
 			-- Modo normal: mostrar todos los botones y dejar panel (puede ocultarse si prefieres)
@@ -1042,7 +1042,7 @@ function agarrarOSoltar()
 				GUIrefs.magnetBtn.Visible = false
 				GUIrefs.dragHandle.Visible = false
 				GUIrefs.forcePanel.Visible = true
-				GUIrefs.forceLabelSmall.Text = "Lanzamiento"
+				GUIrefs.forceLabelSmall.Text = "Launch"
 				GUIrefs.forceInput.Text = tostring(math.floor(fuerzaLanzamiento))
 				GUIrefs.grabBtn.Visible = true
 				GUIrefs.throwBtn.Visible = true
@@ -1280,4 +1280,4 @@ end)
 -- Inicial update de estados UI
 updateButtonStates()
 
--- FIN DEL SCRIPT - Credits to 48973854274252 For translation
+-- FIN DEL SCRIPT (˘ ³˘)translated by 48973854274252 On github
