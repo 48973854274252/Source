@@ -1,0 +1,1282 @@
+
+-- LocalScript listo para pegar en StarterPlayerScripts
+-- Telekinesis + Mobile UI (integraciÃ³n: panel de fuerza integrado en la barra,
+-- magnet oculta Lanzar/Agarrar y muestra "Fuerza", al agarrar muestra "Lanzamiento", solo permite nÃºmeros)
+
+-- VARIABLES GLOBALES
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+
+local holding, target, holdDistance, anchoredWhileHolding = false, nil, 10, false
+
+local run, UIS = game:GetService("RunService"), game:GetService("UserInputService")
+
+-- Fuerzas fÃ­sicas
+local vel = Instance.new("BodyVelocity")
+vel.MaxForce = Vector3.new(1, 1, 1) * 1e5
+vel.P = 12500
+
+local gyro = Instance.new("BodyGyro")
+gyro.MaxTorque = Vector3.new(1, 1, 1) * 1e6
+gyro.P = 3000
+
+local originalRotation = nil
+
+-- SelectionBox (contorno)
+local SelectionBox = Instance.new("SelectionBox")
+SelectionBox.Name = "Contorno"
+SelectionBox.LineThickness = 0.08
+SelectionBox.Parent = game:GetService("CoreGui")
+
+-- ImÃ¡n
+local imanActivo, radioIman, fuerzaIman = false, 30, 200
+local objetosIman, gravityBackup = {}, {}
+local actualRadio = radioIman
+local fuerzaImanMin, fuerzaImanMax = 50, 2000
+
+-- Lanzamiento normal
+local fuerzaLanzamiento, fuerzaLanzamientoMin, fuerzaLanzamientoMax = 1000, 100, 4000
+
+-- CÃ­rculo visual avanzado
+local usingDrawing = Drawing and Drawing.new and typeof(Drawing.new)=="function"
+local imancircle, circleGui, circleImg
+local circleColor = Color3.fromRGB(0,170,255)
+local surfacePos, surfaceNormal = Vector3.zero, Vector3.new(0,1,0)
+
+if usingDrawing then
+	imancircle = Drawing.new("Circle")
+	imancircle.Visible, imancircle.Transparency, imancircle.Color, imancircle.Thickness, imancircle.Filled = false, 1, circleColor, 2, false
+else
+	circleGui = Instance.new("BillboardGui")
+	circleGui.Name, circleGui.Size, circleGui.SizeOffset, circleGui.AlwaysOnTop = "ImanCircleGui", UDim2.new(2,0,2,0), Vector2.new(0,0), true
+	circleGui.Parent = workspace
+	circleImg = Instance.new("ImageLabel")
+	circleImg.BackgroundTransparency, circleImg.Image, circleImg.ImageColor3 = 1, "rbxassetid://13523341990", circleColor
+	circleImg.AnchorPoint, circleImg.Position, circleImg.Size = Vector2.new(0.5,0.5), UDim2.fromScale(0.5,0.5), UDim2.fromScale(1,1)
+	circleImg.Parent, circleGui.Enabled = circleGui, false
+end
+
+-- GUI de fuerza (CoreGui) â€” lo dejamos pero lo ocultamos en mÃ³vil (integramos en la barra)
+local fuerzaGui = Instance.new("ScreenGui")
+fuerzaGui.Name = "FuerzaImanGui"
+fuerzaGui.ResetOnSpawn = false
+fuerzaGui.Parent = game:GetService("CoreGui")
+local fuerzaLabel = Instance.new("TextLabel")
+fuerzaLabel.Name = "FuerzaImanLabel"
+fuerzaLabel.BackgroundTransparency = 1
+fuerzaLabel.Size = UDim2.new(0, 240, 0, 48)
+fuerzaLabel.Position = UDim2.new(1, -260, 1, -60) -- abajo-derecha
+fuerzaLabel.TextScaled = true
+fuerzaLabel.Font = Enum.Font.GothamBold
+fuerzaLabel.TextColor3 = Color3.new(1,1,1)
+fuerzaLabel.TextStrokeTransparency = 0.5
+fuerzaLabel.Visible = true
+fuerzaLabel.Parent = fuerzaGui
+
+-- Controles mÃ³viles / PC
+local holdLeft, holdRight, holdQ, holdE = false, false, false, false
+local usingGamepad = UIS.GamepadEnabled
+UIS.GamepadConnected:Connect(function() usingGamepad = true end)
+UIS.GamepadDisconnected:Connect(function() usingGamepad = false end)
+
+-- Virtual mouse (pixel coordinates)
+local virtualMousePos = nil -- Vector2 in pixels; nil means not set yet
+-- ahora el cursor virtual aparece centrado por defecto (peticiÃ³n)
+local virtualMouseCenter = Vector2.new(0.5, 0.5) -- center of screen
+local virtualMouseSize = 64 -- pixels diameter
+local virtualMouseEnabled = UIS.TouchEnabled -- enable virtual mouse only on touch devices
+
+-- GUI references to update states from anywhere
+local GUIrefs = {}
+
+-- Utilidades
+local function esParteDePersonaje(obj)
+	for _, plr in ipairs(game.Players:GetPlayers()) do
+		if plr.Character and obj:IsDescendantOf(plr.Character) then return true end
+	end
+	return false
+end
+
+local function tieneSoldaduraNoAnclada(obj)
+	for _, c in ipairs(obj:GetConnectedParts()) do
+		if c ~= obj and not c.Anchored then return true end
+	end
+	return false
+end
+
+local function restaurarGravedad()
+	for obj, oldGravity in pairs(gravityBackup) do
+		if obj and obj:IsDescendantOf(workspace) then obj.CustomPhysicalProperties = oldGravity end
+	end
+	gravityBackup = {}
+end
+
+local function lerpVec3(a, b, t) return a + (b - a) * t end
+
+-- Screen size helpers
+local function getScreenSize()
+	local vs = camera.ViewportSize
+	return vs.X, vs.Y
+end
+
+local function computeVirtualCenterPixels()
+	local sx, sy = getScreenSize()
+	return Vector2.new(sx * virtualMouseCenter.X, sy * virtualMouseCenter.Y)
+end
+
+-- Initialize virtualMousePos to center if touch device
+if virtualMouseEnabled then
+	virtualMousePos = computeVirtualCenterPixels()
+end
+
+-- Estado de ocultado de la GUI
+local guiHidden = false
+
+-- getInputPosition: prioritize virtual mouse on touch devices, otherwise use real mouse (player:GetMouse for accurate viewport coords)
+local function getInputPosition()
+	-- If touch & virtual mouse enabled -> use virtual position
+	if UIS.TouchEnabled and virtualMouseEnabled and virtualMousePos then
+		return virtualMousePos.X, virtualMousePos.Y
+	end
+	-- For PC use player's mouse.X/Y
+	if mouse and mouse.X and mouse.Y then
+		return mouse.X, mouse.Y
+	end
+	-- Fallback
+	local pos = UIS:GetMouseLocation()
+	return pos.X, pos.Y
+end
+
+-- Raycast auxiliar desde pantalla
+local function raycastFromScreen(x, y, maxDist)
+	local ray = camera:ScreenPointToRay(x, y)
+	local dist = maxDist or 1000
+	return workspace:FindPartOnRayWithIgnoreList(Ray.new(ray.Origin, ray.Direction * dist), {player.Character})
+end
+
+-- Buscar superficie bajo el punto apuntado (utilizado por imÃ¡n avanzado)
+local function getSurfaceAtPoint(point, ignore)
+	local rayLength = 50
+	local directions = {
+		Vector3.new(0,-1,0), -- Abajo (piso)
+		camera.CFrame.LookVector, -- Adelante (pared)
+		-camera.CFrame.LookVector, -- AtrÃ¡s
+	}
+	for _,dir in ipairs(directions) do
+		local ray = Ray.new(point, dir * rayLength)
+		local part, pos, norm = workspace:FindPartOnRayWithIgnoreList(ray, ignore or {})
+		if part then return pos, norm end
+	end
+	return point, Vector3.new(0,1,0)
+end
+
+-- Actualizar apariencia de botones segÃºn estados
+local function updateButtonStates()
+	-- ImÃ¡n y Agarrar cambian color cuando estÃ¡n activos
+	if GUIrefs.magnetBtn then
+		if imanActivo then
+			GUIrefs.magnetBtn.BackgroundColor3 = Color3.fromRGB(25,130,255)
+			GUIrefs.magnetBtn.TextColor3 = Color3.fromRGB(255,255,255)
+			GUIrefs.magnetBtn.Text = "ImÃ¡n âœ“"
+		else
+			GUIrefs.magnetBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+			GUIrefs.magnetBtn.TextColor3 = Color3.fromRGB(240,240,240)
+			GUIrefs.magnetBtn.Text = "ImÃ¡n"
+		end
+	end
+	if GUIrefs.grabBtn then
+		if holding then
+			GUIrefs.grabBtn.BackgroundColor3 = Color3.fromRGB(45,195,100)
+			GUIrefs.grabBtn.Text = "Soltar"
+		else
+			GUIrefs.grabBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+			GUIrefs.grabBtn.Text = "Agarrar"
+		end
+	end
+	-- Anchor visual (si hay objeto y anclado)
+	if GUIrefs.anchorBtn then
+		if anchoredWhileHolding then
+			GUIrefs.anchorBtn.BackgroundColor3 = Color3.fromRGB(200,160,60)
+			GUIrefs.anchorBtn.Text = "Anclado"
+		else
+			GUIrefs.anchorBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+			GUIrefs.anchorBtn.Text = "Anclar"
+		end
+	end
+end
+
+-- Visual del virtual mouse y overlay del radio del imÃ¡n en UI
+local radiusScreenScale = 2.0 -- factor para convertir radioIman a pÃ­xeles en UI (ajustable)
+local function updateVMVisuals()
+	local screenX, screenY = getScreenSize()
+	if not GUIrefs.screenGui then return end
+	-- Virtual mouse frame (posicionar)
+	if GUIrefs.vm and virtualMousePos then
+		local px = math.clamp(virtualMousePos.X - virtualMouseSize/2, 0, screenX - virtualMouseSize)
+		local py = math.clamp(virtualMousePos.Y - virtualMouseSize/2, 0, screenY - virtualMouseSize)
+		GUIrefs.vm.Position = UDim2.new(0, px, 0, py)
+	end
+	-- ImÃ¡n overlay on UI: center at virtualMousePos (o mouse pos)
+	if GUIrefs.vmCircle then
+		local cx, cy = getInputPosition()
+		local radPx = math.clamp(math.floor(radioIman * radiusScreenScale), 8, math.min(screenX, screenY))
+		GUIrefs.vmCircle.Size = UDim2.new(0, radPx*2, 0, radPx*2)
+		GUIrefs.vmCircle.Position = UDim2.new(0, cx - radPx, 0, cy - radPx)
+		GUIrefs.vmCircle.ImageColor3 = imanActivo and Color3.fromRGB(60,170,255) or Color3.fromRGB(80,80,80)
+		GUIrefs.vmCircle.Visible = not guiHidden
+	end
+end
+
+-- =======================
+-- CREAR INTERFAZ MÃ“VIL MEJORADA
+-- =======================
+
+local draggingWidget = nil -- nil or string id ("hide"/"vm"/"bar")
+local barHeight = 86
+local barBottomOffset = 80 -- se ajustarÃ¡ por alignBarToJumpButton
+local jumpButtonDetected = nil
+
+-- Buscar un posible botÃ³n de salto y devolver su GUIObject (o nil)
+local function findJumpButton()
+	local function searchIn(container)
+		for _, obj in ipairs(container:GetDescendants()) do
+			if obj:IsA("GuiObject") then
+				local name = (obj.Name or ""):lower()
+				if name:match("jump") or name:match("jumpbutton") or name:match("jump_frame") or name:match("jumpbuttonimage") then
+					if obj.Visible and obj.AbsoluteSize and obj.AbsoluteSize.Y > 10 then
+						return obj
+					end
+				end
+			end
+		end
+		return nil
+	end
+
+	if player:FindFirstChild("PlayerGui") then
+		local found = searchIn(player.PlayerGui)
+		if found then return found end
+	end
+	local core = game:GetService("CoreGui")
+	local ok, res = pcall(function() return searchIn(core) end)
+	if ok and res then return res end
+
+	-- fallback heurÃ­stico bottom-right
+	if player:FindFirstChild("PlayerGui") then
+		local fallback
+		local sx, sy = getScreenSize()
+		for _, obj in ipairs(player.PlayerGui:GetDescendants()) do
+			if obj:IsA("GuiObject") and obj.Visible and obj.AbsoluteSize and obj.AbsoluteSize.Y > 10 then
+				local centerY = obj.AbsolutePosition.Y + obj.AbsoluteSize.Y * 0.5
+				local centerX = obj.AbsolutePosition.X + obj.AbsoluteSize.X * 0.5
+				if centerX > sx * 0.55 and centerY > sy * 0.45 then
+					fallback = obj
+					break
+				end
+			end
+		end
+		return fallback
+	end
+
+	return nil
+end
+
+local function alignBarToJumpButton(bottomBar)
+	local sx, sy = getScreenSize()
+	if not bottomBar then return end
+	if not jumpButtonDetected or not jumpButtonDetected.Parent then
+		jumpButtonDetected = findJumpButton()
+	end
+	if jumpButtonDetected and jumpButtonDetected.AbsoluteSize and jumpButtonDetected.AbsoluteSize.Y > 0 then
+		local jumpCenterY = jumpButtonDetected.AbsolutePosition.Y + jumpButtonDetected.AbsoluteSize.Y * 0.5
+		local newOffset = math.floor(sy - jumpCenterY - (barHeight * 0.5))
+		newOffset = math.clamp(newOffset, 0, math.max(0, sy - barHeight))
+		barBottomOffset = newOffset
+		-- mantener left actual
+		local leftPx = bottomBar.AbsolutePosition.X
+		bottomBar.Position = UDim2.new(0, leftPx, 1, -barBottomOffset)
+	end
+end
+
+local function crearGUI_Movil()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "LevitatoMobileGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.Parent = playerGui
+	GUIrefs.screenGui = screenGui
+
+	-- Obtener dimensiones y adaptar tamaÃ±os
+	local screenW, screenH = getScreenSize()
+	local barWidthScale = screenW < 900 and 0.88 or 0.75
+	local buttonBigW = screenW < 900 and 92 or 116
+	local smallBtnW = screenW < 900 and 48 or 56
+	barHeight = 86
+	barBottomOffset = math.clamp(math.floor(screenH * 0.12), 60, 140)
+
+	-- Base: barra inferior semi-transparente posicionada en la izquierda
+	local bottomBar = Instance.new("Frame")
+	bottomBar.Name = "BottomBar"
+	bottomBar.AnchorPoint = Vector2.new(0, 1)
+	bottomBar.Size = UDim2.new(barWidthScale, 0, 0, barHeight)
+	bottomBar.Position = UDim2.new(0.03, 0, 1, -barBottomOffset)
+	bottomBar.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	bottomBar.BackgroundTransparency = 0.45
+	bottomBar.BorderSizePixel = 0
+	bottomBar.Parent = screenGui
+	GUIrefs.bottomBar = bottomBar
+	bottomBar.ClipsDescendants = true
+	bottomBar.Active = true -- capturar inputs para que no traspasen
+
+	local corner = Instance.new("UICorner", bottomBar)
+	corner.CornerRadius = UDim.new(0, 18)
+	local stroke = Instance.new("UIStroke", bottomBar)
+	stroke.Color = Color3.fromRGB(80,80,80)
+	stroke.Transparency = 0.6
+	stroke.Thickness = 2
+
+	-- Padding y layout centrado con spacing uniforme
+	local padding = Instance.new("UIPadding", bottomBar)
+	padding.PaddingLeft = UDim.new(0, 18)
+	padding.PaddingRight = UDim.new(0, 18)
+	padding.PaddingTop = UDim.new(0, 8)
+	padding.PaddingBottom = UDim.new(0, 8)
+
+	local layout = Instance.new("UIListLayout", bottomBar)
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 14)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	-- Helper para botones
+	local function makeButton(name, text, size)
+		local b = Instance.new("TextButton")
+		b.Name = name
+		b.Text = text
+		b.Font = Enum.Font.GothamBold
+		b.TextScaled = true
+		b.TextColor3 = Color3.fromRGB(240,240,240)
+		b.BackgroundColor3 = Color3.fromRGB(30,30,30)
+		b.BackgroundTransparency = 0.55
+		b.BorderSizePixel = 0
+		b.Size = size or UDim2.new(0,buttonBigW,0,56)
+		b.AutoButtonColor = false
+		b.Active = true -- capturar touch; evita traspaso
+		local uic = Instance.new("UICorner", b)
+		uic.CornerRadius = UDim.new(0,14)
+		local vstroke = Instance.new("UIStroke", b)
+		vstroke.Color = Color3.fromRGB(110,110,110)
+		vstroke.Transparency = 0.6
+		vstroke.Thickness = 1.2
+		return b
+	end
+
+	-- Crear botones en orden: Lanzar | Anclar | + | - | ImÃ¡n | Agarrar
+	local throwBtn = makeButton("ThrowBtn", "Lanzar", UDim2.new(0,buttonBigW,0,60)); throwBtn.LayoutOrder = 1; throwBtn.Parent = bottomBar
+	local anchorBtn = makeButton("AnchorBtn", "Anclar", UDim2.new(0,buttonBigW,0,60)); anchorBtn.LayoutOrder = 2; anchorBtn.Parent = bottomBar
+	local zoomInBtn = makeButton("ZoomInBtn", "+", UDim2.new(0,smallBtnW,0,52)); zoomInBtn.LayoutOrder = 3; zoomInBtn.Parent = bottomBar
+	local zoomOutBtn = makeButton("ZoomOutBtn", "-", UDim2.new(0,smallBtnW,0,52)); zoomOutBtn.LayoutOrder = 4; zoomOutBtn.Parent = bottomBar
+	local magnetBtn = makeButton("MagnetBtn", "ImÃ¡n", UDim2.new(0,buttonBigW,0,60)); magnetBtn.LayoutOrder = 5; magnetBtn.Parent = bottomBar
+	local grabBtn = makeButton("GrabBtn", "Agarrar", UDim2.new(0,buttonBigW,0,60)); grabBtn.LayoutOrder = 6; grabBtn.Parent = bottomBar
+
+	GUIrefs.anchorBtn = anchorBtn
+	GUIrefs.zoomInBtn = zoomInBtn
+	GUIrefs.zoomOutBtn = zoomOutBtn
+	GUIrefs.magnetBtn = magnetBtn
+	GUIrefs.grabBtn = grabBtn
+	GUIrefs.throwBtn = throwBtn
+
+	-- HideBtn: fijo por defecto, movible solo con long-press corto (0.1s)
+	local hideBtn = Instance.new("TextButton")
+	hideBtn.Name = "HideBtn"
+	hideBtn.Text = "â¦¿"
+	hideBtn.Font = Enum.Font.GothamBold
+	hideBtn.TextScaled = true
+	hideBtn.TextColor3 = Color3.fromRGB(255,255,255)
+	hideBtn.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	hideBtn.BackgroundTransparency = 0.5
+	hideBtn.Size = UDim2.new(0,48,0,48)
+	hideBtn.AnchorPoint = Vector2.new(1,0)
+	hideBtn.Position = UDim2.new(1, -18, 0, 18)
+	hideBtn.Parent = screenGui
+	GUIrefs.hideBtn = hideBtn
+	local hideCorner = Instance.new("UICorner", hideBtn); hideCorner.CornerRadius = UDim.new(0, 12)
+	local hideStroke = Instance.new("UIStroke", hideBtn); hideStroke.Color = Color3.fromRGB(100,100,100); hideStroke.Transparency = 0.5; hideStroke.Thickness = 2
+	hideBtn.Active = true
+
+	-- Virtual mouse visual
+	local vm = Instance.new("TextButton")
+	vm.Name = "VirtualMouse"
+	vm.AnchorPoint = Vector2.new(0, 0)
+	vm.Size = UDim2.new(0, virtualMouseSize, 0, virtualMouseSize)
+	vm.BackgroundTransparency = 0.6
+	vm.BackgroundColor3 = Color3.fromRGB(10,10,10)
+	vm.Text = ""
+	vm.AutoButtonColor = false
+	vm.Parent = screenGui
+	GUIrefs.vm = vm
+	local vmCorner = Instance.new("UICorner", vm); vmCorner.CornerRadius = UDim.new(1,0)
+	local vmStroke = Instance.new("UIStroke", vm); vmStroke.Color = Color3.fromRGB(60,160,255); vmStroke.Transparency = 0.4; vmStroke.Thickness = 2
+	local vmDot = Instance.new("Frame"); vmDot.Name = "Dot"; vmDot.AnchorPoint = Vector2.new(0.5,0.5); vmDot.Size = UDim2.new(0,12,0,12); vmDot.Position = UDim2.fromScale(0.5,0.5); vmDot.BackgroundColor3 = Color3.fromRGB(60,160,255); vmDot.Parent = vm; local vmDotCorner = Instance.new("UICorner", vmDot); vmDotCorner.CornerRadius = UDim.new(1,0)
+
+	-- Overlay circle image to represent imÃ¡n radius on screen
+	local vmCircle = Instance.new("ImageLabel")
+	vmCircle.Name = "VirtualMagnetCircle"
+	vmCircle.BackgroundTransparency = 1
+	vmCircle.Image = "rbxassetid://13523341990"
+	vmCircle.ImageColor3 = circleColor
+	vmCircle.AnchorPoint = Vector2.new(0,0)
+	vmCircle.Size = UDim2.new(0, 100, 0, 100)
+	vmCircle.Position = UDim2.new(0, 0, 0, 0)
+	vmCircle.ZIndex = 2
+	vmCircle.Visible = false
+	vmCircle.Parent = screenGui
+	GUIrefs.vmCircle = vmCircle
+
+	-- Drag handle (botÃ³n) con "<>"
+	local dragHandle = Instance.new("TextButton")
+	dragHandle.Name = "DragHandle"
+	dragHandle.Size = UDim2.new(0, 48, 1, -20)
+	dragHandle.LayoutOrder = 999
+	dragHandle.BackgroundColor3 = Color3.fromRGB(24,24,24)
+	dragHandle.BackgroundTransparency = 0.6
+	dragHandle.BorderSizePixel = 0
+	dragHandle.Parent = bottomBar
+	dragHandle.AutoButtonColor = false
+	dragHandle.Font = Enum.Font.GothamBlack
+	dragHandle.Text = "<>"
+	dragHandle.TextColor3 = Color3.fromRGB(200,200,200)
+	dragHandle.TextScaled = true
+	dragHandle.Active = true
+	local dhCorner = Instance.new("UICorner", dragHandle); dhCorner.CornerRadius = UDim.new(0, 10)
+	local dhStroke = Instance.new("UIStroke", dragHandle); dhStroke.Color = Color3.fromRGB(80,80,80); dhStroke.Transparency = 0.6; dhStroke.Thickness = 1
+
+	-- Force panel colocado al final (derecha) dentro de la barra: mostrarÃ¡ "Fuerza" o "Lanzamiento" segÃºn el modo
+	local forcePanel = Instance.new("Frame")
+	forcePanel.Name = "ForcePanel"
+	forcePanel.Size = UDim2.new(0, 180, 1, -20)
+	forcePanel.LayoutOrder = 998
+	forcePanel.BackgroundTransparency = 1
+	forcePanel.Parent = bottomBar
+
+	local forceLabelSmall = Instance.new("TextLabel")
+	forceLabelSmall.Name = "ForceLabelSmall"
+	forceLabelSmall.Size = UDim2.new(0.5, 0, 1, 0)
+	forceLabelSmall.Position = UDim2.new(0, 0, 0, 0)
+	forceLabelSmall.BackgroundTransparency = 1
+	forceLabelSmall.Font = Enum.Font.GothamBold
+	forceLabelSmall.TextColor3 = Color3.fromRGB(220,220,220)
+	forceLabelSmall.TextScaled = true
+	forceLabelSmall.Text = "Fuerza"
+	forceLabelSmall.TextXAlignment = Enum.TextXAlignment.Left
+	forceLabelSmall.Parent = forcePanel
+
+	local forceInput = Instance.new("TextBox")
+	forceInput.Name = "ForceInput"
+	forceInput.Size = UDim2.new(0.5, -8, 0.7, 0)
+	forceInput.Position = UDim2.new(0.5, 8, 0.15, 0)
+	forceInput.BackgroundColor3 = Color3.fromRGB(35,35,35)
+	forceInput.TextColor3 = Color3.fromRGB(230,230,230)
+	forceInput.Font = Enum.Font.Gotham
+	forceInput.TextScaled = true
+	forceInput.Text = tostring(math.floor(fuerzaIman))
+	forceInput.ClearTextOnFocus = false
+	forceInput.PlaceholderText = "Valor"
+	forceInput.Parent = forcePanel
+	local fiCorner = Instance.new("UICorner", forceInput); fiCorner.CornerRadius = UDim.new(0,8)
+	local fiStroke = Instance.new("UIStroke", forceInput); fiStroke.Color = Color3.fromRGB(70,70,70); fiStroke.Transparency = 0.6
+
+	-- Guardar referencias
+	GUIrefs.dragHandle = dragHandle
+	GUIrefs.forcePanel = forcePanel
+	GUIrefs.forceLabelSmall = forceLabelSmall
+	GUIrefs.forceInput = forceInput
+
+	-- Position VM initially (center if virtualMousePos exists)
+	local function placeVMAtPixels(p)
+		local sx, sy = getScreenSize()
+		vm.Position = UDim2.new(0, math.clamp(p.X - virtualMouseSize/2, 0, sx - virtualMouseSize), 0, math.clamp(p.Y - virtualMouseSize/2, 0, sy - virtualMouseSize))
+	end
+	if virtualMousePos then
+		placeVMAtPixels(virtualMousePos)
+	else
+		virtualMousePos = computeVirtualCenterPixels()
+		placeVMAtPixels(virtualMousePos)
+	end
+
+	-- =======================
+	-- FunciÃ³n para actualizar la barra segÃºn modo: magnet / holding / normal
+	-- =======================
+	local function updateBarMode()
+		-- Si es dispositivo tÃ¡ctil, ocultamos la fuerza global y usamos el panel integrado
+		if UIS.TouchEnabled and fuerzaGui then fuerzaGui.Enabled = false end
+
+		-- Caso: si se estÃ¡ sosteniendo algo -> ocultar ImÃ¡n y DragHandle, mostrar panel como "Lanzamiento"
+		if holding and target then
+			GUIrefs.magnetBtn.Visible = false
+			GUIrefs.throwBtn.Visible = true -- lanzar botÃ³n puede cambiarse; peticiÃ³n: "cuando este agarrando algo que se oculten los botones iman y el de arrastrar que aparezca otro que diga lanzamiento"
+			-- ocultar drag handle (segÃºn peticiÃ³n) y mostrar en su lugar el panel con "Lanzamiento"
+			GUIrefs.dragHandle.Visible = false
+			GUIrefs.forcePanel.Visible = true
+			GUIrefs.forceLabelSmall.Text = "Lanzamiento"
+			GUIrefs.forceInput.Text = tostring(math.floor(fuerzaLanzamiento))
+			-- opcional: ocultar ImÃ¡n por seguridad (ya ocultado), mantener otros botones
+			GUIrefs.grabBtn.Visible = true -- 'Soltar' debe verse
+			GUIrefs.throwBtn.Visible = true
+		elseif imanActivo then
+			-- Si imÃ¡n activo -> ocultar lanzar y agarrar y usar panel "Fuerza"
+			GUIrefs.throwBtn.Visible = false
+			GUIrefs.grabBtn.Visible = false
+			GUIrefs.magnetBtn.Visible = true
+			GUIrefs.dragHandle.Visible = true
+			GUIrefs.forcePanel.Visible = true
+			GUIrefs.forceLabelSmall.Text = "Fuerza"
+			GUIrefs.forceInput.Text = tostring(math.floor(fuerzaIman))
+		else
+			-- Modo normal: mostrar todos los botones y dejar panel (puede ocultarse si prefieres)
+			GUIrefs.throwBtn.Visible = true
+			GUIrefs.grabBtn.Visible = true
+			GUIrefs.magnetBtn.Visible = true
+			GUIrefs.dragHandle.Visible = true
+			-- por defecto ocultar panel si no estÃ¡ en modo imÃ¡n ni sosteniendo (menos intrusivo)
+			GUIrefs.forcePanel.Visible = false
+		end
+	end
+
+	-- =======================
+	-- Conexiones de botones (click simple)
+	-- =======================
+	magnetBtn.MouseButton1Click:Connect(function()
+		-- activar/desactivar imÃ¡n
+		if holding then
+			pcall(function()
+				game.StarterGui:SetCore("SendNotification", {
+					Title = "âŒ No disponible",
+					Text = "Suelta el objeto para activar el imÃ¡n",
+					Duration = 2
+				})
+			end)
+			return
+		end
+		imanActivo = not imanActivo
+		if not imanActivo then restaurarGravedad() end
+		updateButtonStates()
+		updateBarMode()
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = imanActivo and "ðŸ§² Modo ImÃ¡n ACTIVADO" or "ðŸ§² Modo ImÃ¡n DESACTIVADO",
+				Text = "Atrae solo piezas sueltas en el cÃ­rculo azul",
+				Duration = 2
+			})
+		end)
+	end)
+	grabBtn.MouseButton1Click:Connect(function()
+		agarrarOSoltar()
+		updateButtonStates()
+		updateBarMode()
+	end)
+	throwBtn.MouseButton1Click:Connect(function()
+		throwBtn.BackgroundColor3 = Color3.fromRGB(200,70,70)
+		lanzar()
+		wait(0.08)
+		throwBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+		updateBarMode()
+	end)
+	anchorBtn.MouseButton1Click:Connect(function()
+		alternarAnclado()
+		updateButtonStates()
+		updateBarMode()
+	end)
+
+	-- Zoom buttons behavior (mantener)
+	zoomInBtn.MouseButton1Down:Connect(function()
+		holdRight = true
+		zoomInBtn.BackgroundColor3 = Color3.fromRGB(70,150,255)
+	end)
+	zoomInBtn.MouseButton1Up:Connect(function()
+		holdRight = false
+		zoomInBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+	end)
+	zoomInBtn.MouseLeave:Connect(function() holdRight = false; zoomInBtn.BackgroundColor3 = Color3.fromRGB(30,30,30) end)
+
+	zoomOutBtn.MouseButton1Down:Connect(function()
+		holdLeft = true
+		zoomOutBtn.BackgroundColor3 = Color3.fromRGB(70,150,255)
+	end)
+	zoomOutBtn.MouseButton1Up:Connect(function()
+		holdLeft = false
+		zoomOutBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+	end)
+	zoomOutBtn.MouseLeave:Connect(function() holdLeft = false; zoomOutBtn.BackgroundColor3 = Color3.fromRGB(30,30,30) end)
+
+	-- =======================
+	-- Helper draggable con requiredHold (segÃºn tu peticiÃ³n: 0.1s)
+	-- =======================
+	local function makeDraggableInstance(uiElement, id, requiredHold, onStart, onMove, onEnd)
+		requiredHold = requiredHold or 0
+		local activeInputs = {}
+		uiElement.InputBegan:Connect(function(input)
+			if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+			if draggingWidget then return end
+			local startPos = input.Position or UIS:GetMouseLocation()
+			if not startPos then return end
+			activeInputs[input] = {start = startPos, moved = false, ready = false, ended = false}
+			-- timer para requiredHold
+			if requiredHold > 0 then
+				spawn(function()
+					local t0 = tick()
+					while tick() - t0 < requiredHold do
+						if activeInputs[input] == nil or activeInputs[input].ended then return end
+						wait(0.02)
+					end
+					if activeInputs[input] then activeInputs[input].ready = true end
+				end)
+			else
+				activeInputs[input].ready = true
+			end
+			local conn
+			conn = input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					if draggingWidget == id and onEnd then onEnd() end
+					activeInputs[input] = nil
+					if conn then conn:Disconnect() end
+					if draggingWidget == id then draggingWidget = nil end
+				end
+			end)
+		end)
+
+		UIS.InputChanged:Connect(function(input)
+			local info = activeInputs[input]
+			if not info then return end
+			local pos = input.Position or UIS:GetMouseLocation()
+			if not pos then return end
+			-- threshold para considerar movimiento (evita arranques accidentales)
+			if not info.moved then
+				if (pos - info.start).Magnitude > 8 and info.ready then
+					info.moved = true
+					draggingWidget = id
+					if onStart then onStart(pos) end
+				end
+			else
+				if onMove then onMove(pos) end
+			end
+		end)
+	end
+
+	-- Drag VM (requiredHold 0)
+	makeDraggableInstance(vm, "vm", 0,
+		function(startPos) virtualMousePos = Vector2.new(startPos.X, startPos.Y); placeVMAtPixels(virtualMousePos) end,
+		function(pos) virtualMousePos = Vector2.new(pos.X, pos.Y); placeVMAtPixels(virtualMousePos) end,
+		function() end
+	)
+	vm.MouseButton1Click:Connect(function()
+		if draggingWidget == nil or draggingWidget == "vm" then agarrarOSoltar() end
+	end)
+
+	-- Drag for hideBtn (requiredHold 0.1s). Click corto = toggle
+	makeDraggableInstance(hideBtn, "hide", 0.1,
+		function(startPos)
+			local sx, sy = getScreenSize()
+			local newX = math.clamp(startPos.X / sx, 0.02, 0.98)
+			local newY = math.clamp(startPos.Y / sy, 0.02, 0.98)
+			hideBtn.Position = UDim2.new(newX, 0, newY, 0)
+		end,
+		function(pos)
+			local sx, sy = getScreenSize()
+			local newX = math.clamp(pos.X / sx, 0.02, 0.98)
+			local newY = math.clamp(pos.Y / sy, 0.02, 0.98)
+			hideBtn.Position = UDim2.new(newX, 0, newY, 0)
+		end,
+		function() end
+	)
+
+	hideBtn.MouseButton1Click:Connect(function()
+		if draggingWidget ~= nil and draggingWidget ~= "hide" then return end
+		if draggingWidget == "hide" then return end
+		guiHidden = not guiHidden
+		if guiHidden then
+			if GUIrefs.bottomBar then GUIrefs.bottomBar.Visible = false end
+			if GUIrefs.vm then GUIrefs.vm.Visible = false end
+			if GUIrefs.vmCircle then GUIrefs.vmCircle.Visible = false end
+			if SelectionBox and SelectionBox.Parent then SelectionBox.Parent = nil end
+			hideBtn.Text = "â—¤"
+			hideBtn.BackgroundTransparency = 0
+			hideBtn.BackgroundColor3 = Color3.fromRGB(30,30,30)
+		else
+			if GUIrefs.bottomBar then GUIrefs.bottomBar.Visible = true end
+			if GUIrefs.vm then GUIrefs.vm.Visible = true end
+			if SelectionBox and not SelectionBox.Parent then SelectionBox.Parent = game:GetService("CoreGui") end
+			hideBtn.Text = "â¦¿"
+			hideBtn.BackgroundTransparency = 0.5
+		end
+	end)
+
+	-- Drag handle para mover la barra horizontalmente (requiredHold 0.1s)
+	makeDraggableInstance(dragHandle, "bar", 0.1,
+		function(startPos)
+			local startX = startPos.X
+			local barLeft = bottomBar.AbsolutePosition.X
+			local dragOffset = startX - barLeft
+			dragHandle:SetAttribute("dragOffset", dragOffset)
+		end,
+		function(pos)
+			local dragOffset = dragHandle:GetAttribute("dragOffset") or 0
+			local sx, sy = getScreenSize()
+			local barWnow = bottomBar.AbsoluteSize.X
+			local newLeft = pos.X - dragOffset
+			newLeft = math.clamp(newLeft, 0, math.max(0, sx - barWnow))
+			bottomBar.Position = UDim2.new(0, newLeft, 1, -barBottomOffset)
+		end,
+		function() end
+	)
+
+	-- =======================
+	-- Force Input: permitir solo caracteres numÃ©ricos y aplicar valor
+	-- =======================
+	local function sanitizeNumberText(s)
+		-- Permitir solo dÃ­gitos y un punto decimal opcional
+		local out = s:gsub("[^%d%.]", "")
+		-- permitir un solo punto
+		local first, rest = out:match("^([%d]*%.?)(.*)")
+		if first then
+			-- eliminar puntos extras en 'rest'
+			rest = rest:gsub("%.", "")
+			out = first .. rest
+		end
+		-- evitar mÃºltiples ceros iniciales no necesarios (dejar como el usuario lo escribe)
+		return out
+	end
+
+	forceInput:GetPropertyChangedSignal("Text"):Connect(function()
+		-- filtrar caracteres en cada cambio
+		local sanitized = sanitizeNumberText(forceInput.Text or "")
+		if sanitized ~= forceInput.Text then
+			forceInput.Text = sanitized
+		end
+	end)
+
+	forceInput.FocusLost:Connect(function(enterPressed)
+		-- aplicar el valor solo si es nÃºmero vÃ¡lido
+		local text = forceInput.Text or ""
+		local num = tonumber(text)
+		if num then
+			-- si el panel representa Fuerza del imÃ¡n
+			if GUIrefs.forceLabelSmall and GUIrefs.forceLabelSmall.Text == "Fuerza" then
+				num = math.clamp(num, fuerzaImanMin, fuerzaImanMax)
+				fuerzaIman = num
+				forceInput.Text = tostring(math.floor(fuerzaIman))
+			-- si representa Lanzamiento
+			elseif GUIrefs.forceLabelSmall and GUIrefs.forceLabelSmall.Text == "Lanzamiento" then
+				num = math.clamp(num, fuerzaLanzamientoMin, fuerzaLanzamientoMax)
+				fuerzaLanzamiento = num
+				forceInput.Text = tostring(math.floor(fuerzaLanzamiento))
+			end
+		else
+			-- restaurar al valor actual si no es vÃ¡lido
+			if GUIrefs.forceLabelSmall and GUIrefs.forceLabelSmall.Text == "Fuerza" then
+				forceInput.Text = tostring(math.floor(fuerzaIman))
+			else
+				forceInput.Text = tostring(math.floor(fuerzaLanzamiento))
+			end
+		end
+	end)
+
+	-- Mostrar solo si el dispositivo tiene touch
+	screenGui.Enabled = UIS.TouchEnabled
+
+	-- guardar refs de UI para uso externo
+	GUIrefs.bottomBar = bottomBar
+	GUIrefs.throwBtn = throwBtn
+	GUIrefs.anchorBtn = anchorBtn
+	GUIrefs.zoomInBtn = zoomInBtn
+	GUIrefs.zoomOutBtn = zoomOutBtn
+	GUIrefs.magnetBtn = magnetBtn
+	GUIrefs.grabBtn = grabBtn
+	GUIrefs.dragHandle = dragHandle
+
+	-- Inicializar modo
+	updateBarMode()
+end
+
+-- Crear la GUI mÃ³vil si corresponde
+crearGUI_Movil()
+
+-- Intentar detectar el botÃ³n de salto periÃ³dicamente y alinear la barra
+spawn(function()
+	while true do
+		wait(0.5)
+		if GUIrefs and GUIrefs.bottomBar then
+			alignBarToJumpButton(GUIrefs.bottomBar)
+		end
+	end
+end)
+
+-- =======================
+-- Render/Heartbeat: lÃ³gica del imÃ¡n, selecciÃ³n y actualizaciones visuales
+-- =======================
+run.RenderStepped:Connect(function()
+	-- Resalte / selecciÃ³n (usar mouse.Target si hay mouse)
+	if guiHidden then
+		if SelectionBox and SelectionBox.Parent then SelectionBox.Parent = nil end
+	else
+		if SelectionBox and not SelectionBox.Parent then SelectionBox.Parent = game:GetService("CoreGui") end
+
+		if imanActivo and not holding then
+			SelectionBox.Adornee = nil
+		else
+			if holding and target then
+				SelectionBox.Color3, SelectionBox.Adornee = Color3.fromRGB(0,255,0), target
+			else
+				local sx, sy = getInputPosition()
+				local part = nil
+				if not UIS.TouchEnabled and mouse and mouse.Target then
+					part = mouse.Target
+				else
+					local hit = raycastFromScreen(sx, sy, 1000)
+					part = hit
+				end
+				if part and part:IsA("BasePart") and not part.Anchored and not esParteDePersonaje(part) then
+					SelectionBox.Color3, SelectionBox.Adornee = Color3.fromRGB(0,170,255), part
+				else
+					SelectionBox.Adornee = nil
+				end
+			end
+		end
+	end
+
+	-- Actualizar imÃ¡n en world: ahora su centro usa getInputPosition (virtual mouse en mÃ³vil o mouse en PC)
+	if imanActivo then
+		local sx, sy = getInputPosition()
+		local ray = camera:ScreenPointToRay(sx, sy)
+		local hit, pos, norm = workspace:FindPartOnRayWithIgnoreList(Ray.new(ray.Origin, ray.Direction * 1000), {player.Character})
+		if hit then
+			surfacePos, surfaceNormal = lerpVec3(surfacePos,pos,0.35), lerpVec3(surfaceNormal,norm,0.35)
+		else
+			local defPos = ray.Origin + ray.Direction * 15
+			surfacePos, surfaceNormal = lerpVec3(surfacePos,defPos,0.15), lerpVec3(surfaceNormal,Vector3.new(0,1,0),0.15)
+		end
+		actualRadio = actualRadio + (radioIman - actualRadio) * 0.25
+
+		-- Color del cÃ­rculo segÃºn fuerzaIman
+		local fuerzaPercent = (fuerzaIman-fuerzaImanMin)/(fuerzaImanMax-fuerzaImanMin)
+		local colorEscala = Color3.fromHSV(0.58 + fuerzaPercent*0.3, 1, 1)
+
+		if usingDrawing then
+			local screenPos = camera:WorldToViewportPoint(surfacePos)
+			imancircle.Visible, imancircle.Position, imancircle.Radius = true, Vector2.new(screenPos.X, screenPos.Y), actualRadio
+			imancircle.Color = colorEscala
+		else
+			circleGui.Enabled, circleGui.Size = true, UDim2.new(0,actualRadio*2,0,actualRadio*2)
+			circleGui.CFrame = CFrame.new(surfacePos, surfacePos + camera.CFrame.LookVector)
+				* CFrame.fromMatrix(Vector3.zero,
+					surfaceNormal:Cross(Vector3.new(0,1,0)).Magnitude>0.01 and surfaceNormal:Cross(Vector3.new(0,1,0)).Unit or Vector3.new(1,0,0),
+					surfaceNormal,
+					-surfaceNormal:Cross(Vector3.new(1,0,0)).Unit)
+			circleGui.Position = surfacePos
+			if circleImg then circleImg.ImageColor3 = colorEscala end
+		end
+	else
+		if usingDrawing then imancircle.Visible = false
+		elseif circleGui then circleGui.Enabled = false end
+	end
+
+	-- Actualizar GUI de fuerza global solo si no estamos en touch (integrada en la barra en mÃ³vil)
+	if not UIS.TouchEnabled then
+		if imanActivo then
+			fuerzaLabel.Visible = true
+			fuerzaLabel.Text = "Fuerza del imÃ¡n: "..math.floor(fuerzaIman)
+			local fuerzaPercent = (fuerzaIman-fuerzaImanMin)/(fuerzaImanMax-fuerzaImanMin)
+			fuerzaLabel.TextColor3 = Color3.fromHSV(0.58 + fuerzaPercent*0.3, 1, 1)
+		else
+			fuerzaLabel.Visible = true
+			fuerzaLabel.Text = "Fuerza de lanzamiento: "..math.floor(fuerzaLanzamiento)
+			local fuerzaPercent = (fuerzaLanzamiento-fuerzaLanzamientoMin)/(fuerzaLanzamientoMax-fuerzaLanzamientoMin)
+			fuerzaLabel.TextColor3 = Color3.fromHSV(0.58 + fuerzaPercent*0.3, 1, 1)
+		end
+	else
+		-- en mÃ³vil no mostramos la label separada
+		fuerzaLabel.Visible = false
+	end
+
+	-- actualizar VM visuals y estado de botones
+	updateVMVisuals()
+	updateButtonStates()
+end)
+
+-- Heartbeat: movimiento del objeto, imÃ¡n, ajuste de distancias
+run.Heartbeat:Connect(function()
+	-- Telequinesis normal
+	if holding and target then
+		if not anchoredWhileHolding then
+			local grabPos
+			if usingGamepad then
+				grabPos = camera.CFrame.Position + camera.CFrame.LookVector.Unit * holdDistance
+			else
+				local sx, sy = getInputPosition()
+				local ray = camera:ScreenPointToRay(sx, sy)
+				grabPos = ray.Origin + ray.Direction.Unit * holdDistance
+			end
+			vel.Velocity = (grabPos - target.Position) * 5
+			if originalRotation then
+				gyro.CFrame = originalRotation + target.Position
+			end
+		else
+			vel.Velocity = Vector3.zero
+		end
+	end
+
+	-- Bloque imÃ¡n mejorado (fuerza escalada y pegado a superficies)
+	if imanActivo then
+		local centro, nuevosAtraidos = surfacePos, {}
+		local fuerzaEscalada = fuerzaIman * (radioIman/30)^1.5 -- fuerza aumenta con radio
+		local nearby = workspace:GetPartBoundsInBox(CFrame.new(centro), Vector3.new(radioIman*2, radioIman*2, radioIman*2))
+		for _, obj in ipairs(nearby) do
+			if obj:IsA("BasePart") and not obj.Anchored and not esParteDePersonaje(obj)
+				and not tieneSoldaduraNoAnclada(obj) and obj.Transparency < 1 and obj.CanCollide and obj ~= target then
+				local distancia = (obj.Position - centro).Magnitude
+				if distancia <= radioIman then
+					local surfPos, surfNorm = getSurfaceAtPoint(obj.Position, {player.Character})
+					local haciaCentro = (centro - surfPos)
+					local nuevaPos = surfPos + (haciaCentro.Magnitude>0 and haciaCentro.Unit or Vector3.new(0,0,0)) * math.min(haciaCentro.Magnitude, 1.5)
+					local dirFinal = (nuevaPos - obj.Position)
+					dirFinal = dirFinal - surfNorm * dirFinal:Dot(surfNorm)
+					local bv = obj:FindFirstChild("ImanBV") or Instance.new("BodyVelocity")
+					bv.Name, bv.MaxForce, bv.P = "ImanBV", Vector3.new(1,1,1)*1e5, 15000
+					if dirFinal.Magnitude > 0 then
+						bv.Velocity = dirFinal.Unit * fuerzaEscalada
+					else
+						bv.Velocity = Vector3.zero
+					end
+					bv.Parent = obj
+					if not gravityBackup[obj] then
+						gravityBackup[obj] = obj.CustomPhysicalProperties
+						obj.CustomPhysicalProperties = PhysicalProperties.new(0, 0.3, 0.5, 1, 1)
+					end
+					nuevosAtraidos[obj] = true
+				end
+			end
+		end
+		for obj in pairs(objetosIman) do
+			if not nuevosAtraidos[obj] then
+				if obj and obj:FindFirstChild("ImanBV") then obj.ImanBV:Destroy() end
+				if gravityBackup[obj] then obj.CustomPhysicalProperties = gravityBackup[obj]; gravityBackup[obj] = nil end
+			end
+		end
+		objetosIman = nuevosAtraidos
+	else
+		for obj in pairs(objetosIman) do if obj and obj:FindFirstChild("ImanBV") then obj.ImanBV:Destroy() end end
+		restaurarGravedad()
+		objetosIman = {}
+	end
+
+	-- Ajuste distancia/radio
+	if imanActivo then
+		if holdLeft or holdQ then radioIman = math.max(5, radioIman - 1.3)
+		elseif holdRight or holdE then radioIman = math.min(200, radioIman + 1.3) end
+	else
+		if holdLeft or holdQ then holdDistance = math.max(2, holdDistance - 0.4)
+		elseif holdRight or holdE then holdDistance = math.min(1000, holdDistance + 0.4) end
+	end
+end)
+
+-- =======================
+-- Acciones principales (se usan desde los botones mÃ³viles y controles PC)
+-- =======================
+function agarrarOSoltar()
+	-- Si imÃ¡n activo, indicar que primero hay que soltar el imÃ¡n
+	if imanActivo then
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "ðŸ§² ImÃ¡n activo",
+				Text = "Suelta el imÃ¡n para agarrar objetos",
+				Duration = 2
+			})
+		end)
+		return
+	end
+
+	if holding then
+		originalRotation = nil
+		vel.Parent, gyro.Parent, anchoredWhileHolding, target, holding = nil, nil, false, nil, false
+		updateButtonStates()
+	else
+		-- usar la posiciÃ³n de input (mouse o virtual) para raycast
+		local sx, sy = getInputPosition()
+		local part, pos = raycastFromScreen(sx, sy, 1000)
+		if part and part:IsA("BasePart") and not esParteDePersonaje(part) then
+			-- si la pieza estÃ¡ anclada, solo agarrarla si fue anclada por telekinesis (atributo)
+			if part.Anchored and not part:GetAttribute("TelekinesisAnchored") then
+				-- no la agarres (es parte del mapa)
+				return
+			end
+			-- si la anclaste tÃº, la desanclamos y quitamos atributo
+			if part.Anchored and part:GetAttribute("TelekinesisAnchored") then
+				part.Anchored = false
+				part:SetAttribute("TelekinesisAnchored", nil)
+			end
+
+			target, anchoredWhileHolding = part, false
+			originalRotation = part.CFrame - part.Position
+			gyro.CFrame = originalRotation + part.Position
+			gyro.Parent = part
+			vel.Velocity, vel.Parent = Vector3.zero, part
+			if pos then
+				holdDistance = (camera.CFrame.Position - pos).Magnitude
+			else
+				holdDistance = (camera.CFrame.Position - part.Position).Magnitude
+			end
+			holding = true
+			updateButtonStates()
+		end
+	end
+	-- actualizar visualmente la barra (mostrar input de Lanzamiento si aplica)
+	if GUIrefs and GUIrefs.forcePanel then
+		-- llamar a la funciÃ³n definida dentro crearGUI_Movil actualiza el panel, usamos un pequeÃ±o hack: forzamos su re-evaluaciÃ³n
+		-- (la variable updateBarMode es local dentro crearGUI_Movil; si necesitas exponerla, se podrÃ­a refactorizar)
+		-- Como workaround, re-evaluamos visibilidad aquÃ­:
+		if GUIrefs.forcePanel then
+			-- simulamos los mismos checks (duplicado mÃ­nimo)
+			if holding and target then
+				GUIrefs.magnetBtn.Visible = false
+				GUIrefs.dragHandle.Visible = false
+				GUIrefs.forcePanel.Visible = true
+				GUIrefs.forceLabelSmall.Text = "Lanzamiento"
+				GUIrefs.forceInput.Text = tostring(math.floor(fuerzaLanzamiento))
+				GUIrefs.grabBtn.Visible = true
+				GUIrefs.throwBtn.Visible = true
+			elseif imanActivo then
+				GUIrefs.throwBtn.Visible = false
+				GUIrefs.grabBtn.Visible = false
+				GUIrefs.magnetBtn.Visible = true
+				GUIrefs.dragHandle.Visible = true
+				GUIrefs.forcePanel.Visible = true
+				GUIrefs.forceLabelSmall.Text = "Fuerza"
+				GUIrefs.forceInput.Text = tostring(math.floor(fuerzaIman))
+			else
+				GUIrefs.throwBtn.Visible = true
+				GUIrefs.grabBtn.Visible = true
+				GUIrefs.magnetBtn.Visible = true
+				GUIrefs.dragHandle.Visible = true
+				GUIrefs.forcePanel.Visible = false
+			end
+		end
+	end
+end
+
+function lanzar()
+	if imanActivo then
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "ðŸ§² ImÃ¡n activo",
+				Text = "Desactiva el imÃ¡n para lanzar objetos",
+				Duration = 2
+			})
+		end)
+		return
+	end
+
+	if holding and target then
+		if anchoredWhileHolding then target.Anchored, anchoredWhileHolding = false, false end
+		vel.Parent, gyro.Parent, holding = nil, nil, false
+		originalRotation = nil
+		local impulse = Instance.new("BodyVelocity")
+		impulse.Velocity = camera.CFrame.LookVector * fuerzaLanzamiento
+		impulse.MaxForce, impulse.P, impulse.Parent = Vector3.new(1,1,1)*1e6, 12500, target
+		game:GetService("Debris"):AddItem(impulse, 0.5)
+		target = nil
+		updateButtonStates()
+	end
+end
+
+function alternarAnclado()
+	if imanActivo then
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "âŒ No disponible",
+				Text = "Suelta el objeto para activar el imÃ¡n",
+				Duration = 2
+			})
+		end)
+		return
+	end
+
+	if holding and target then
+		anchoredWhileHolding = not anchoredWhileHolding
+		target.Anchored = anchoredWhileHolding
+
+		if anchoredWhileHolding then
+			-- MARCA con atributo que tÃº lo anclaste (para poder agarrarlo luego a pesar de estar anclado)
+			target:SetAttribute("TelekinesisAnchored", true)
+
+			vel.Parent = nil
+			gyro.Parent = nil
+			target.AssemblyLinearVelocity = Vector3.zero
+			target.AssemblyAngularVelocity = Vector3.zero
+
+			local humanoidRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+			if humanoidRoot and (humanoidRoot.Position - target.Position).Magnitude < 5 then
+				humanoidRoot.Velocity = Vector3.zero
+				humanoidRoot.AssemblyLinearVelocity = Vector3.zero
+				humanoidRoot.CFrame = humanoidRoot.CFrame + Vector3.new(0, 3, 0)
+			end
+		else
+			-- QUITA el atributo al desanclar
+			target:SetAttribute("TelekinesisAnchored", nil)
+
+			vel.Parent = target
+			gyro.Parent = target
+		end
+
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = anchoredWhileHolding and "ðŸ“Œ Anclado" or "ðŸ“Ž Desanclado",
+				Text = "Toca anclar para alternar",
+				Duration = 2
+			})
+		end)
+		updateButtonStates()
+	end
+end
+
+local function toggleIman()
+	if holding then
+		pcall(function()
+			game.StarterGui:SetCore("SendNotification", {
+				Title = "âŒ No disponible",
+				Text = "Suelta el objeto para activar el imÃ¡n",
+				Duration = 2
+			})
+		end)
+		return
+	end
+	imanActivo = not imanActivo
+	if not imanActivo then restaurarGravedad() end
+	updateButtonStates()
+	-- actualizar barra si existe
+	if GUIrefs and GUIrefs.forcePanel then
+		-- visibilidad manejada en RenderStepped via updateBarMode dentro crearGUI_Movil
+		-- forzar re-evaluaciÃ³n mÃ­nima:
+		if imanActivo then
+			GUIrefs.throwBtn.Visible = false
+			GUIrefs.grabBtn.Visible = false
+			GUIrefs.forcePanel.Visible = true
+			GUIrefs.forceLabelSmall.Text = "Fuerza"
+			GUIrefs.forceInput.Text = tostring(math.floor(fuerzaIman))
+		else
+			if GUIrefs.forcePanel then GUIrefs.forcePanel.Visible = false end
+			GUIrefs.throwBtn.Visible = true
+			GUIrefs.grabBtn.Visible = true
+		end
+	end
+	pcall(function()
+		game.StarterGui:SetCore("SendNotification", {
+			Title = imanActivo and "ðŸ§² Modo ImÃ¡n ACTIVADO" or "ðŸ§² Modo ImÃ¡n DESACTIVADO",
+			Text = "Atrae solo piezas sueltas en el cÃ­rculo azul",
+			Duration = 2
+		})
+	end)
+end
+
+-- =======================
+-- Input handlers (incluye Z/X para fuerza)
+-- =======================
+UIS.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if input.KeyCode == Enum.KeyCode.Q then holdQ = true
+		elseif input.KeyCode == Enum.KeyCode.E then holdE = true
+		elseif input.KeyCode == Enum.KeyCode.R then alternarAnclado()
+		elseif input.KeyCode == Enum.KeyCode.F then lanzar()
+		elseif input.KeyCode == Enum.KeyCode.T then
+			if holding then
+				pcall(function()
+					game.StarterGui:SetCore("SendNotification", {
+						Title = "âŒ No disponible",
+						Text = "Suelta el objeto para activar el imÃ¡n",
+						Duration = 2
+					})
+				end)
+				return
+			end
+			toggleIman()
+		elseif input.KeyCode == Enum.KeyCode.LeftControl or input.KeyCode == Enum.KeyCode.RightControl then
+			pcall(function()
+				game.StarterGui:SetCore("SendNotification", {
+					Title = "Ayuda PC",
+					Text = "âŒ¨ï¸ Controles PC:\nâ€¢ Click Izquierdo â†’ Agarrar / Soltar\nâ€¢ F â†’ Lanzar\nâ€¢ Q/E (mantener) â†’ Acercar/Alejar -- o cambiar Ã¡rea del imÃ¡n\nâ€¢ R â†’ Anclar/Desanclar\nâ€¢ T â†’ Modo ImÃ¡n\nâ€¢ Z/X â†’ Bajar/Subir fuerza\nâ€¢ Ctrl â†’ Mostrar este panel",
+					Duration = 8
+				})
+			end)
+		elseif input.KeyCode == Enum.KeyCode.Z then
+			-- bajar fuerza
+			if imanActivo then
+				fuerzaIman = math.max(fuerzaImanMin, fuerzaIman - 25)
+				pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "Fuerza del imÃ¡n", Text = "â†˜ " .. math.floor(fuerzaIman), Duration = 1}) end)
+			else
+				fuerzaLanzamiento = math.max(fuerzaLanzamientoMin, fuerzaLanzamiento - 100)
+				pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "Fuerza de lanzamiento", Text = "â†˜ " .. math.floor(fuerzaLanzamiento), Duration = 1}) end)
+			end
+		elseif input.KeyCode == Enum.KeyCode.X then
+			-- subir fuerza
+			if imanActivo then
+				fuerzaIman = math.min(fuerzaImanMax, fuerzaIman + 25)
+				pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "Fuerza del imÃ¡n", Text = "â†— " .. math.floor(fuerzaIman), Duration = 1}) end)
+			else
+				fuerzaLanzamiento = math.min(fuerzaLanzamientoMax, fuerzaLanzamiento + 100)
+				pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "Fuerza de lanzamiento", Text = "â†— " .. math.floor(fuerzaLanzamiento), Duration = 1}) end)
+			end
+		end
+	end
+
+	if input.UserInputType == Enum.UserInputType.Gamepad1 and usingGamepad then
+		if input.KeyCode == Enum.KeyCode.ButtonX then agarrarOSoltar()
+		elseif input.KeyCode == Enum.KeyCode.ButtonB then lanzar()
+		elseif input.KeyCode == Enum.KeyCode.ButtonY then alternarAnclado()
+		elseif input.KeyCode == Enum.KeyCode.DPadLeft then holdLeft = true
+		elseif input.KeyCode == Enum.KeyCode.DPadRight then holdRight = true
+		elseif input.KeyCode == Enum.KeyCode.DPadDown then
+			pcall(function()
+				game.StarterGui:SetCore("SendNotification", {
+					Title = "Ayuda Mando",
+					Text = "ðŸŽ® Controles Mando:\nâ€¢ X â†’ Agarrar/Soltar\nâ€¢ B â†’ Lanzar\nâ€¢ â¬…/âž¡ (mantener) â†’ Acercar/Alejar -- o cambiar Ã¡rea del imÃ¡n\nâ€¢ Y â†’ Anclar/Desanclavar\nâ€¢ LB â†’ Modo ImÃ¡n (solo piezas sueltas en el cÃ­rculo azul)\nâ€¢ DPadDown â†’ Mostrar este panel",
+					Duration = 9
+				})
+			end)
+		elseif input.KeyCode == Enum.KeyCode.ButtonL1 then
+			if holding then
+				pcall(function()
+					game.StarterGui:SetCore("SendNotification", {
+						Title = "âŒ No disponible",
+						Text = "Suelta el objeto para activar el imÃ¡n",
+						Duration = 2
+					})
+				end)
+				return
+			end
+			toggleIman()
+		end
+	end
+end)
+
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.Keyboard then
+		if input.KeyCode == Enum.KeyCode.Q then holdQ = false
+		elseif input.KeyCode == Enum.KeyCode.E then holdE = false end
+	elseif input.UserInputType == Enum.UserInputType.Gamepad1 then
+		if input.KeyCode == Enum.KeyCode.DPadLeft then holdLeft = false
+		elseif input.KeyCode == Enum.KeyCode.DPadRight then holdRight = false end
+	end
+end)
+
+-- Mantener soporte del mouse (PC): click izquierdo para agarrar / soltar
+mouse.Button1Down:Connect(function()
+	if not UIS.TouchEnabled then
+		agarrarOSoltar()
+	end
+end)
+
+-- Inicial update de estados UI
+updateButtonStates()
+
+-- FIN DEL SCRIPT
